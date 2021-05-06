@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"reflect"
 
-	mcpbson "github.com/qlik-oss/mongocursorpagination/bson"
+	mcpbson "github.com/eny-qlik/mongocursorpagination/bson"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -177,13 +177,18 @@ func Find(ctx context.Context, p FindParams, results interface{}) (Cursor, error
 		return Cursor{}, err
 	}
 
-	shouldSecondarySortOnID := p.PaginatedField != "_id"
 
 	// Execute the augmented query, get an additional element to see if there's another page
 	err = executeCursorQuery(ctx, p.Collection, queries, sort, p.Limit, p.Collation, results)
 	if err != nil {
 		return Cursor{}, err
 	}
+
+	return BuildCursor(p, count, results)
+}
+
+func BuildCursor(p FindParams, count int, results interface{}) (Cursor, error) {
+	shouldSecondarySortOnID := p.PaginatedField != "_id"
 
 	// Get the results slice's pointer and value
 	resultsPtr := reflect.ValueOf(results)
@@ -215,6 +220,7 @@ func Find(ctx context.Context, p FindParams, results interface{}) (Cursor, error
 		// Generate the previous cursor
 		if hasPrevious {
 			firstResult := resultsVal.Index(0).Interface()
+			var err error
 			previousCursor, err = generateCursor(firstResult, p.PaginatedField, shouldSecondarySortOnID)
 			if err != nil {
 				return Cursor{}, fmt.Errorf("could not create a previous cursor: %s", err)
@@ -224,6 +230,7 @@ func Find(ctx context.Context, p FindParams, results interface{}) (Cursor, error
 		// Generate the next cursor
 		if hasNext {
 			lastResult := resultsVal.Index(resultsVal.Len() - 1).Interface()
+			var err error
 			nextCursor, err = generateCursor(lastResult, p.PaginatedField, shouldSecondarySortOnID)
 			if err != nil {
 				return Cursor{}, fmt.Errorf("could not create a next cursor: %s", err)
